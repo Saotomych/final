@@ -64,7 +64,7 @@ bool GetProcessing(string& res, string fn)
 	<HTML> ...
 */	
 	
-	cout << "Response for file: " << fn << endl;
+	// cout << "Response for file: " << fn << endl;
 	
 	bool ret;
 
@@ -112,7 +112,7 @@ bool GetProcessing(string& res, string fn)
 
 void clientworker(int clientsd)
 {
-	cout << "Client thread started for client: " << clientsd << endl;
+	// cout << "Client thread started for client: " << clientsd << endl;
 	
 	char buffer[256];
 	
@@ -126,8 +126,6 @@ void clientworker(int clientsd)
 	Host: 127.0.0.1:12345
 	Accept: *//*
 */
-
-	printf("Here is the message: %s\n",buffer);
 	
 //	std::map<std::string, std::string> headers;
 //	std::istringstream rawstream(buffer);
@@ -143,7 +141,7 @@ void clientworker(int clientsd)
 //	}
 // 
 // 	for (auto& kv : headers) {
-// 		std::cout << kv.first << ": " << kv.second << std::endl;
+// 		std::// cout << kv.first << ": " << kv.second << std::endl;
 // 	}
 	
 	string response;
@@ -154,7 +152,7 @@ void clientworker(int clientsd)
 		string filename(&buffer[4], p-(&buffer[4]));
 		if (filename.size() <= 2)
 		{
-			cout << "Filename is not explicit. " << endl;
+			// cout << "Filename is not explicit. " << endl;
 			if ( GetProcessing(response, string(homedir+filename+string("index.htm"))) == false )
 			{
 				response.clear();
@@ -163,19 +161,19 @@ void clientworker(int clientsd)
 					response.clear();
 					if ( GetProcessing(response, string(homedir+filename+string("index.php"))) == false )
 					{
-						cout << "Default files not found" << endl;
+						// cout << "Default files not found" << endl;
 					}
 				}
 			}
 		}
 		else
 		{
-			cout << "Filename is explicit: " << homedir << filename << endl;
+			// cout << "Filename is explicit: " << homedir << filename << endl;
 			GetProcessing(response, string(homedir+filename));
 		}
 	}
 
-	cout << response << endl;
+	// cout << response << endl;
 	
 	n = write(clientsd, response.c_str(), response.size());
 	if (n < 0)
@@ -184,39 +182,54 @@ void clientworker(int clientsd)
 	shutdown(clientsd, SHUT_RDWR);
 	close(clientsd);
 
-	cout << "Client thread end for client: " << clientsd << endl;
+	// cout << "Client thread end for client: " << clientsd << endl;
 }
 
 int main(int argc, char** argv)
 {
 	getoptions(argc, argv);
-	
-	int serversd  = socket(AF_INET, SOCK_STREAM, 0);
-    if (serversd < 0) 
-       error("ERROR opening socket");
-    
-    struct sockaddr_in serv_addr;
-    bzero((char *) &serv_addr, sizeof(serv_addr));
-    
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(port);
 
-    if (bind(serversd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) 
-             error("ERROR on binding");
-    
-    for(;;)
-    {
-        listen(serversd, SOMAXCONN);
+	pid_t pid = fork();
+	if (pid == 0)
+	{
+        close(STDIN_FILENO);
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
+
+
+    	int serversd  = socket(AF_INET, SOCK_STREAM, 0);
+        if (serversd < 0)
+           error("ERROR opening socket");
+
+        struct sockaddr_in serv_addr;
+        bzero((char *) &serv_addr, sizeof(serv_addr));
+
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        serv_addr.sin_port = htons(port);
+
+        if (bind(serversd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
+                 error("ERROR on binding");
         
-        struct sockaddr_in client_addr;
-        socklen_t sz = sizeof(client_addr);
-        int clientsd = accept(serversd, (struct sockaddr *) &client_addr, &sz);
-        if (clientsd < 0) 
-        	error("ERROR on accept");
+        for(;;)
+        {
+            listen(serversd, SOMAXCONN);
             
-        thread thr(clientworker, clientsd);
-        thr.detach();    	
-    }
+            struct sockaddr_in client_addr;
+            socklen_t sz = sizeof(client_addr);
+            int clientsd = accept(serversd, (struct sockaddr *) &client_addr, &sz);
+            if (clientsd < 0)
+            	error("ERROR on accept");
+
+            thread thr(clientworker, clientsd);
+            thr.detach();
+        }
+
+	}
+	else
+	{
+		return 0;
+	}
+
 }
 
