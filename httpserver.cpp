@@ -3,16 +3,17 @@
 #include <time.h>
 #include <iostream>
 #include <sstream>
-#include <fstream>
 #include <thread>
 #include <string>
 #include <sys/types.h> 
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <map>
+#include <vector>
 #include <algorithm>
 #include <memory>
-//#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string.hpp>
 
 using namespace std;
 
@@ -49,7 +50,7 @@ void getoptions(int argc, char** argv)
 	}
 }
 
-bool GetProcessing(stringstream& res, string fn)
+bool GetProcessing(string& res, string fn)
 {
 /*	
 	HTTP/1.0 200 OK 
@@ -67,47 +68,43 @@ bool GetProcessing(stringstream& res, string fn)
 	
 	bool ret;
 
-	// Read file to stringstream buffer
-	stringstream strStream;
-	size_t filesize = 0;
-
-	unique_ptr<ifstream> hFl(new ifstream(fn));
-	if (!hFl->is_open())
+	vector<char> strFile;
+	struct stat st;
+	if ( stat(fn.c_str(), &st) )
 	{
-		res << "HTTP/1.0 404 Page not found" << endl;
+		res += "HTTP/1.0 404 Page not found\n";
 		ret = false;
 	}
 	else
 	{
-		res << "HTTP/1.0 200 OK" << endl;
+		res += "HTTP/1.0 200 OK\n";
 		ret = true;
-   
-		copy( (istreambuf_iterator<char>(*(hFl).get() )),
-			istreambuf_iterator<char>(),
-			ostreambuf_iterator<char>(strStream)
-			);
-		
-		filesize = hFl->tellg();
-		hFl->close();
+
+	    FILE* hFl = fopen(fn.c_str(), "r");
+		strFile.resize(st.st_size);
+		fread(strFile.data(), st.st_size, 1, hFl);
+		fclose(hFl);
 	}
 
-	res << "Date: Fri, 08 Aug 2003 08:12:31 GMT" << endl; 
-	res << "Server: Custom (Unix)" << endl; 
-	res << "MIME-version: 1.0" << endl; 
-	res << "Last-Modified: Fri, 01 Aug 2003 12:45:26 GMT" << endl; 
-	res << "Content-Type: text/html" << endl; 
-	res << "Connection: close" << endl;
+	res += "Date: Fri, 08 Aug 2003 08:12:31 GMT\n";
+	res += "Server: Custom (Unix)\n";
+	res += "MIME-version: 1.0\n";
+	res += "Last-Modified: Fri, 01 Aug 2003 12:45:26 GMT\n";
+	res += "Content-Type: text/html\n";
+	res += "Connection: close\n";
 	
 	if (ret)
 	{ 
-		res << "Content-Length: " << filesize << endl << endl;
-		res << strStream.str() << endl;
+		stringstream tmp;
+		tmp << "Content-Length: " << st.st_size << endl << endl;
+		res += tmp.str() + string(strFile.data()) + "\n";
 	}
 	else
 	{
 		string resp404("404 Page not found");
-		res << "Content-Length: " << resp404.size() << endl << endl;
-		res << resp404 << endl;
+		stringstream tmp;
+		tmp << "Content-Length: " << resp404.size() << endl << endl;
+		res += tmp.str() + resp404 + "\n";
 	}
 	
 	return ret;
@@ -149,7 +146,7 @@ void clientworker(int clientsd)
 // 		std::cout << kv.first << ": " << kv.second << std::endl;
 // 	}
 	
-	stringstream response;
+	string response;
 	string request(buffer, 4);
 	if ( request == string("GET "))
 	{
@@ -160,12 +157,10 @@ void clientworker(int clientsd)
 			cout << "Filename is not explicit. " << endl;
 			if ( GetProcessing(response, string(homedir+filename+string("index.htm"))) == false )
 			{
-				stringstream s;
-				swap(s, response);
+				response.clear();
 				if ( GetProcessing(response, string(homedir+filename+string("index.html"))) == false )
 				{
-					stringstream s;
-					swap(s, response);
+					response.clear();
 					if ( GetProcessing(response, string(homedir+filename+string("index.php"))) == false )
 					{
 						cout << "Default files not found" << endl;
@@ -180,10 +175,10 @@ void clientworker(int clientsd)
 		}
 	}
 
-	cout << response.str() << endl;
+	cout << response << endl;
 	
-	n = write(clientsd, response.str().c_str(), response.str().size());
-	if (n < 0) 
+	n = write(clientsd, response.c_str(), response.size());
+	if (n < 0)
 		error("ERROR writing to socket");
 		
 	shutdown(clientsd, SHUT_RDWR);
