@@ -148,7 +148,9 @@ void clientworker(int clientsd)
 	string request(buffer, 4);
 	if ( request == string("GET "))
 	{
-		char* p = find(&buffer[4], &buffer[255], ' ');
+		char* pq = find(&buffer[4], &buffer[255], '?');
+		char* ps = find(&buffer[4], &buffer[255], ' ');
+		char* p = min(pq,ps);
 		string filename(&buffer[4], p-(&buffer[4]));
 		if (filename.size() <= 2)
 		{
